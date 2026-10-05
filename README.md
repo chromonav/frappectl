@@ -53,6 +53,15 @@ export FRAPPE_API_KEY=xxxxxxxx
 export FRAPPE_API_SECRET=yyyyyyyy
 ```
 
+Or, for a pre-issued OAuth bearer token (for example one an orchestrator obtained per user), set
+`FRAPPE_ACCESS_TOKEN` instead of the key and secret. It is used as-is: never refreshed, never
+written to disk or the keyring. Setting it together with `FRAPPE_API_KEY` / `FRAPPE_API_SECRET` is an error.
+
+```sh
+export FRAPPE_SITE=https://erp.example.com
+export FRAPPE_ACCESS_TOKEN=zzzzzzzz
+```
+
 ### Stored profiles
 
 Generate an API key + secret from **User → Settings → API Access**, then log in:

@@ -353,3 +353,50 @@ def test_api_key_profile_stays_token_type(fake_config):
     creds = fake_config.resolve()
     assert creds.token_type == "token"
     assert creds.wire_token == "k:s"
+
+
+def test_env_access_token_resolves_bearer(fake_config, monkeypatch):
+    monkeypatch.setenv("FRAPPE_SITE", "erp.example.com")
+    monkeypatch.setenv("FRAPPE_ACCESS_TOKEN", "AT-env")
+    creds = fake_config.resolve(interactive=False)
+    assert creds.source == "env"
+    assert creds.token_type == "bearer"
+    assert creds.wire_token == "AT-env"
+    assert creds.refresh_token == ""
+
+
+def test_env_access_token_needs_site(fake_config, monkeypatch):
+    monkeypatch.delenv("FRAPPE_SITE", raising=False)
+    monkeypatch.setenv("FRAPPE_ACCESS_TOKEN", "AT-env")
+    with pytest.raises(ConfigError):
+        fake_config.resolve(interactive=False)
+
+
+def test_env_access_token_conflicts_with_api_key(fake_config, monkeypatch):
+    monkeypatch.setenv("FRAPPE_SITE", "erp.example.com")
+    monkeypatch.setenv("FRAPPE_ACCESS_TOKEN", "AT-env")
+    monkeypatch.setenv("FRAPPE_API_KEY", "k")
+    monkeypatch.setenv("FRAPPE_API_SECRET", "s")
+    with pytest.raises(ConfigError) as exc:
+        fake_config.resolve(interactive=False)
+    assert "AT-env" not in str(exc.value)
+
+
+def test_env_access_token_never_refreshes_or_persists(fake_config, monkeypatch):
+    from frappectl.session import ClientFactory
+
+    monkeypatch.setenv("FRAPPE_SITE", "erp.example.com")
+    monkeypatch.setenv("FRAPPE_ACCESS_TOKEN", "AT-env")
+    client = ClientFactory().create(None, interactive=False, debug=False)
+    transport = client._transport
+    assert transport._http.headers["Authorization"] == "Bearer AT-env"
+    assert transport._credential_provider.refresh() is False
+    profiles, _ = fake_config.list_profiles()
+    assert profiles == {}
+
+
+def test_env_access_token_ignored_when_profile_selected(fake_config, monkeypatch):
+    fake_config.add_profile("acme", "http://acme.test", "k1", "s1")
+    monkeypatch.setenv("FRAPPE_SITE", "erp.example.com")
+    monkeypatch.setenv("FRAPPE_ACCESS_TOKEN", "AT-env")
+    assert fake_config.resolve("acme").source == "acme"

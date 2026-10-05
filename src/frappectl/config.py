@@ -2,8 +2,9 @@
 
 Resolution order for the active site/credentials:
 
-1. Environment variables (``FRAPPE_SITE``, ``FRAPPE_API_KEY``, ``FRAPPE_API_SECRET``) always
-   win. This is the headless / agent path and never touches the keyring.
+1. Environment variables (``FRAPPE_SITE`` plus either ``FRAPPE_API_KEY`` /
+   ``FRAPPE_API_SECRET`` or a pre-issued bearer ``FRAPPE_ACCESS_TOKEN``) always
+   win. An env access token is used as-is: it is never refreshed or persisted. This is the headless / agent path and never touches the keyring.
 2. A stored profile (selected with ``-s/--site`` or the configured default).
    The site URL lives in a plaintext config file; the credential lives in the OS
    keyring. Two credential shapes are supported: an API-key ``key:secret`` string
@@ -599,6 +600,19 @@ def _resolve(profile: str | None = None, interactive: bool = True) -> Credential
     if profile is None and env_site:
         key = os.environ.get("FRAPPE_API_KEY")
         secret = os.environ.get("FRAPPE_API_SECRET")
+        env_token = os.environ.get("FRAPPE_ACCESS_TOKEN")
+        if env_token:
+            if key or secret:
+                raise ConfigError(
+                    "FRAPPE_ACCESS_TOKEN cannot be combined with "
+                    "FRAPPE_API_KEY / FRAPPE_API_SECRET. Set one credential shape."
+                )
+            return Credentials(
+                str(SiteURL.parse(env_site)),
+                OAuthCredential(env_token, "", 0.0, ""),
+                source="env",
+                read_only=_env_truthy(os.environ.get("FRAPPE_READ_ONLY")),
+            )
         if not key or not secret:
             raise ConfigError(
                 "FRAPPE_SITE is set but FRAPPE_API_KEY / FRAPPE_API_SECRET are missing."
